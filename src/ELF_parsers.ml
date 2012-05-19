@@ -2,7 +2,6 @@ open ELF_types
 open ELF_printers
 open ELF_utils
 open Library
-open PPC_parsers
 
 (** Converts an elf endian into a bitstring endian. *)
 let elfdata_to_endian (e: elfdata): Bitstring.endian =
