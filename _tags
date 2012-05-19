@@ -1,1 +1,3 @@
-<*/*.{ml,byte,native}>: pkg_bitstring
+#-*-conf-*-
+<**/*.ml*>: syntax(camlp4o), package(bitstring.syntax)
+<**/*.{byte,native}>: package(bitstring)
