@@ -1,5 +1,11 @@
 type bitstring = Bitstring.bitstring
 
+let mk_rw l =
+  (
+    (fun x -> snd (List.find (fun (k, _) -> k = x) l)),
+    (fun x -> fst (List.find (fun (_, k) -> k = x) l))
+  )
+
 (*module IntMap = Map.Make(struct type t = int let compare = compare end)*)
 module StringMap = Map.Make (String)
 
