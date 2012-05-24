@@ -8,9 +8,15 @@ let infer_elfclass (bs: bitstring): ei_class =
 
 module type ELFCLASS =
 sig
-  (* ELF fields *)
-  type elf_identification
-  val read_elf_identification: bitstring -> elf_identification
-  val write_elf_identification: elf_identification -> bitstring
-  val string_of_elf_identification: elf_identification -> string
+  module ELF_Identification:
+  sig
+    type elf_identification
+    val read: bitstring -> elf_identification
+    val write: elf_identification -> bitstring
+    val to_string: elf_identification -> string
+  end
+  module ELF_Ehdr:
+  sig
+    type elf_ehdr
+  end
 end
