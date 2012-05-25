@@ -11,5 +11,5 @@ let _ =
     | ELFCLASSNONE -> failwith "Unsupported ELF class"
   ) : ELFCLASS)
   in
-  let ei = ELF.ELF_Identification.read bs in
-  print_endline (ELF.ELF_Identification.to_string ei)
+  let ei = ELF.Identification.read bs in
+  print_endline (ELF.Identification.to_string ei)

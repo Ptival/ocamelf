@@ -21,6 +21,11 @@ type ei_data =
   | ELFDATA2LSB
   | ELFDATA2MSB
 
+let bitstring_endian_of_ei_data = function
+| ELFDATA2LSB -> Bitstring.LittleEndian
+| ELFDATA2MSB -> Bitstring.BigEndian
+| _           -> failwith "Unknown endianness"
+
 let (read_ei_data, write_ei_data) = mk_rw
   [ (0, ELFDATANONE)
   ; (1, ELFDATA2LSB)

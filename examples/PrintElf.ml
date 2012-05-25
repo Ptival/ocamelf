@@ -1,9 +1,16 @@
-open ELF_parsers
-open ELF_printers
+open ELF
+open ELF_Identification
 
 let _ =
-  if Array.length Sys.argv <> 2
-  then Printf.printf "Usage: %s <some-elf>\n" Sys.argv.(0)
-  else
-    let elf = read_elf Sys.argv.(1) in
-    print_endline (string_of_elf elf)
+  let bs = Bitstring.bitstring_of_file Sys.argv.(1) in
+  let elfclass = infer_elfclass bs in
+  let module ELF = (val (
+    match elfclass with
+    | ELFCLASS32   -> (module ELF32.Make : ELFCLASS)
+    | ELFCLASS64   -> (module ELF64.Make : ELFCLASS)
+    | ELFCLASSNONE -> failwith "Unsupported ELF class"
+  ) : ELFCLASS)
+  in
+  let ei = ELF.Identification.read bs in
+  let eh = ELF.Ehdr.read ei bs in
+  print_endline (ELF.Ehdr.to_string eh)

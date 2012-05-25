@@ -103,8 +103,10 @@ let string_of_bitstring bs =
 
 (* To print addresses/offsets *)
 let string_of_int32_x = Printf.sprintf "0x%08lx"
+let string_of_int64_x = Printf.sprintf "0x%08Lx"
 (* To print counts/indices *)
 let string_of_int32_d = Int32.to_string
+let string_of_int64_d = Int64.to_string
 
 let sorted_lookup (compare: 'a -> 'b -> int) (arr: 'a array) (v: 'b): 'a option =
   let rec sorted_lookup_aux (i_from: int) (i_to: int): 'a option =
