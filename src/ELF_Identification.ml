@@ -21,7 +21,7 @@ type ei_data =
   | ELFDATA2LSB
   | ELFDATA2MSB
 
-let bitstring_endian_of_ei_data = function
+let endian_of_ei_data = function
 | ELFDATA2LSB -> Bitstring.LittleEndian
 | ELFDATA2MSB -> Bitstring.BigEndian
 | _           -> failwith "Unknown endianness"

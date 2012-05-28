@@ -21,4 +21,10 @@ sig
     val read: Identification.elf_identification -> bitstring -> elf_ehdr
     val to_string: elf_ehdr -> string
   end
+  module Shdr:
+  sig
+    type elf_shdr
+    val read: Ehdr.elf_ehdr -> bitstring -> elf_shdr array
+    val to_string: elf_shdr -> string
+  end
 end

@@ -23,3 +23,5 @@ let ( * ) x y =
 
 let of_int32 = Safe32.to_int
 let to_int32 = Safe32.of_int
+let of_int64 = Safe64.to_int
+let to_int64 = Safe64.of_int

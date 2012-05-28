@@ -83,8 +83,6 @@ struct
   module Ehdr =
   struct
     open ELF_Ehdr
-    open ELF_Identification
-    open Identification
 
     type et =
       | ET_NONE
@@ -133,6 +131,8 @@ struct
     | ET_PROC(x)  -> "ET_PROC("  ^ string_of_int x ^ ")"
     | ET_OTHER(x) -> "ET_OTHER(" ^ string_of_int x ^ ")"
 
+    open Identification
+
     type elf_ehdr =
         { e_ident     : elf_identification
         ; e_type      : et
@@ -148,10 +148,14 @@ struct
         ; e_shentsize : int
         ; e_shnum     : int
         ; e_shstrndx  : int
+        (* extra: *)
+        ; endian      : Bitstring.endian
         }
 
+    open ELF_Identification
+
     let read (e_ident: elf_identification) (bs: bitstring): elf_ehdr =
-      let endian = bitstring_endian_of_ei_data e_ident.ei_data in
+      let endian = endian_of_ei_data e_ident.ei_data in
       bitmatch Bitstring.dropbits 128 bs with
         { e_type      : 16 : int, endian(endian), bind (read_et e_type)
         ; e_machine   : 16 : int, endian(endian), bind (read_em e_machine)
@@ -181,6 +185,7 @@ struct
           ; e_shentsize
           ; e_shnum
           ; e_shstrndx
+          ; endian
           }
 
     let to_string eh =
@@ -215,6 +220,172 @@ struct
         (string_of_int            eh.e_shentsize)
         (string_of_int            eh.e_shnum)
         (string_of_int            eh.e_shstrndx)
+
+  end
+
+  module Shdr =
+  struct
+
+    type sh_type =
+      | SHT_NULL
+      | SHT_PROGBITS
+      | SHT_SYMTAB
+      | SHT_STRTAB
+      | SHT_RELA
+      | SHT_HASH
+      | SHT_DYNAMIC
+      | SHT_NOTE
+      | SHT_NOBITS
+      | SHT_REL
+      | SHT_SHLIB
+      | SHT_DYNSYM
+      | SHT_OS    of int32
+      | SHT_PROC  of int32
+      | SHT_OTHER of int32
+
+    let (read_sh_type, write_sh_type) =
+      let (read_sh_type, write_sh_type) = mk_rw
+        [ ( 0l, SHT_NULL    )
+        ; ( 1l, SHT_PROGBITS)
+        ; ( 2l, SHT_SYMTAB  )
+        ; ( 3l, SHT_STRTAB  )
+        ; ( 4l, SHT_RELA    )
+        ; ( 5l, SHT_HASH    )
+        ; ( 6l, SHT_DYNAMIC )
+        ; ( 7l, SHT_NOTE    )
+        ; ( 8l, SHT_NOBITS  )
+        ; ( 9l, SHT_REL     )
+        ; (10l, SHT_SHLIB   )
+        ; (11l, SHT_DYNSYM  )
+        ]
+      in
+      (
+        (fun x ->
+          if 0x6000_0000l <= x && x <= 0x6FFF_FFFFl
+          then SHT_OS(x)
+          else if 0x7000_0000l <= x && x <= 0x7FFF_FFFFl
+          then SHT_PROC(x)
+          else
+            try read_sh_type x
+            with Not_found -> SHT_OTHER(x)
+        ),
+        (function
+        | SHT_OS(x)    -> x
+        | SHT_PROC(x)  -> x
+        | SHT_OTHER(x) -> x
+        | x            -> write_sh_type x
+        )
+      )
+
+    let string_of_sh_type = function
+    | SHT_NULL     -> "SHT_NULL"
+    | SHT_PROGBITS -> "SHT_PROGBITS"
+    | SHT_SYMTAB   -> "SHT_SYMTAB"
+    | SHT_STRTAB   -> "SHT_STRTAB"
+    | SHT_RELA     -> "SHT_RELA"
+    | SHT_HASH     -> "SHT_HASH"
+    | SHT_DYNAMIC  -> "SHT_DYNAMIC"
+    | SHT_NOTE     -> "SHT_NOTE"
+    | SHT_NOBITS   -> "SHT_NOBITS"
+    | SHT_REL      -> "SHT_REL"
+    | SHT_SHLIB    -> "SHT_SHLIB"
+    | SHT_DYNSYM   -> "SHT_DYNSYM"
+    | SHT_OS(x)    -> "SHT_OS("    ^ string_of_int32_x x ^ ")"
+    | SHT_PROC(x)  -> "SHT_PROC("  ^ string_of_int32_x x ^ ")"
+    | SHT_OTHER(x) -> "SHT_OTHER(" ^ string_of_int32_x x ^ ")"
+
+    type elf_shdr =
+        { sh_name      : int32
+        ; sh_type      : sh_type
+        ; sh_flags     : bitstring
+        ; sh_addr      : int64
+        ; sh_offset    : int64
+        ; sh_size      : int64
+        ; sh_link      : int32
+        ; sh_info      : int32
+        ; sh_addralign : int64
+        ; sh_entsize   : int64
+        (* extra: *)
+        ; name         : string
+        }
+
+    open Ehdr
+
+    let read (e_hdr: elf_ehdr) (bs: bitstring) =
+      let endian = e_hdr.endian in
+      let read_nth (n: int) =
+        let shdr_bit_ofs = Safe.(
+          8 * (of_int64 e_hdr.e_shoff + (n * e_hdr.e_shentsize))
+        ) in
+        bitmatch Bitstring.dropbits shdr_bit_ofs bs with
+          { sh_name      : 32 : endian(endian)
+          ; sh_type      : 32 : endian(endian), bind(read_sh_type sh_type)
+          ; sh_flags     : 64 : bitstring
+          ; sh_addr      : 64 : endian(endian)
+          ; sh_offset    : 64 : endian(endian)
+          ; sh_size      : 64 : endian(endian)
+          ; sh_link      : 32 : endian(endian)
+          ; sh_info      : 32 : endian(endian)
+          ; sh_addralign : 64 : endian(endian)
+          ; sh_entsize   : 64 : endian(endian)
+          } ->
+            { sh_name
+            ; sh_type
+            ; sh_flags
+            ; sh_addr
+            ; sh_offset
+            ; sh_size
+            ; sh_link
+            ; sh_info
+            ; sh_addralign
+            ; sh_entsize
+            ; name = "" (* the name is found in a second pass *)
+            }
+      in
+      let e_shdr_array = Array.init e_hdr.e_shnum read_nth in
+      (* Now we can fill the "name" field *)
+      let find_name n =
+        let strtab_section = e_shdr_array.(e_hdr.e_shstrndx) in
+        let strtab_bit_start = Safe.(8 * of_int64 strtab_section.sh_offset) in
+        let strtab_bit_length = Safe.(8 * of_int64 strtab_section.sh_size) in
+        let strtab_bitstring =
+          Bitstring.subbitstring bs strtab_bit_start strtab_bit_length in
+        (* Hack: we exploit the representation of bitstrings, plus the
+           alignment constraints, to extract the names... *)
+        let (str, ofs, _) = strtab_bitstring in
+        let start = ofs / 8 + n in
+        String.sub str start (String.index_from str start '\000' - start)
+      in
+      Array.map
+        (fun shdr ->
+          { shdr with name = find_name (Int32.to_int shdr.sh_name) }
+        )
+        e_shdr_array
+
+    let to_string sh =
+      Printf.sprintf
+        "
+{ sh_name      = %s -> %s
+; sh_type      = %s
+; sh_flags     = %s
+; sh_addr      = %s
+; sh_offset    = %s
+; sh_size      = %s
+; sh_link      = %s
+; sh_info      = %s
+; sh_addralign = %s
+; sh_entsize   = %s
+}"
+        (string_of_int32_d   sh.sh_name) sh.name
+        (string_of_sh_type   sh.sh_type)
+        (string_of_bitstring sh.sh_flags)
+        (string_of_int64_x   sh.sh_addr)
+        (string_of_int64_x   sh.sh_offset)
+        (string_of_int64_x   sh.sh_size)
+        (string_of_int32_x   sh.sh_link)
+        (string_of_int32_x   sh.sh_info)
+        (string_of_int64_x   sh.sh_addralign)
+        (string_of_int64_x   sh.sh_entsize)
 
   end
 end
