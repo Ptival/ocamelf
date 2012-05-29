@@ -8,19 +8,19 @@ struct
     open ELF_Identification
 
     type elf_identification =
-        { ei_class      : ei_class
-        ; ei_data       : ei_data
-        ; ei_version    : ei_version
+        { ei_class   : ei_class
+        ; ei_data    : ei_data
+        ; ei_version : ei_version
         }
 
     let read (bs: bitstring): elf_identification =
       bitmatch bs with
         { 0x7F       : 8
-        ; "ELF"         : 24 : string
-        ; ei_class      : 8  : int, bind (read_ei_class      ei_class)
-        ; ei_data       : 8  : int, bind (read_ei_data       ei_data)
-        ; ei_version    : 8  : int, bind (read_ei_version    ei_version)
-        ; padding       : 72 : bitstring
+        ; "ELF"      : 24 : string
+        ; ei_class   : 8  : int, bind (read_ei_class      ei_class)
+        ; ei_data    : 8  : int, bind (read_ei_data       ei_data)
+        ; ei_version : 8  : int, bind (read_ei_version    ei_version)
+        ; padding    : 72 : bitstring
         } ->
           assert (is_zeros padding 72);
           { ei_class
@@ -45,8 +45,8 @@ struct
 ; ei_data    = %s
 ; ei_version = %s
 }"
-        (string_of_ei_class   ei.ei_class)
-        (string_of_ei_data    ei.ei_data)
+        (string_of_ei_class   ei.ei_class  )
+        (string_of_ei_data    ei.ei_data   )
         (string_of_ei_version ei.ei_version)
   end
 
@@ -171,20 +171,20 @@ struct
 ; e_shnum     = %s
 ; e_shstrndx  = %s
 }"
-        (Identification.to_string eh.e_ident)
-        (string_of_et             eh.e_type)
-        (string_of_em             eh.e_machine)
-        (string_of_ev             eh.e_version)
-        (string_of_int32_x        eh.e_entry)
-        (string_of_int32_x        eh.e_phoff)
-        (string_of_int32_x        eh.e_shoff)
-        (string_of_bitstring      eh.e_flags)
-        (string_of_int            eh.e_ehsize)
+        (Identification.to_string eh.e_ident    )
+        (string_of_et             eh.e_type     )
+        (string_of_em             eh.e_machine  )
+        (string_of_ev             eh.e_version  )
+        (string_of_int32_x        eh.e_entry    )
+        (string_of_int32_x        eh.e_phoff    )
+        (string_of_int32_x        eh.e_shoff    )
+        (string_of_bitstring      eh.e_flags    )
+        (string_of_int            eh.e_ehsize   )
         (string_of_int            eh.e_phentsize)
-        (string_of_int            eh.e_phnum)
+        (string_of_int            eh.e_phnum    )
         (string_of_int            eh.e_shentsize)
-        (string_of_int            eh.e_shnum)
-        (string_of_int            eh.e_shstrndx)
+        (string_of_int            eh.e_shnum    )
+        (string_of_int            eh.e_shstrndx )
 
   end
 
@@ -341,16 +341,16 @@ struct
 ; sh_addralign = %s
 ; sh_entsize   = %s
 }"
-        (string_of_int32_d   sh.sh_name) sh.name
-        (string_of_sh_type   sh.sh_type)
-        (string_of_bitstring sh.sh_flags)
-        (string_of_int32_x   sh.sh_addr)
-        (string_of_int32_x   sh.sh_offset)
-        (string_of_int32_x   sh.sh_size)
-        (string_of_int32_x   sh.sh_link)
-        (string_of_int32_x   sh.sh_info)
+        (string_of_int32_d   sh.sh_name     ) (* -> *) sh.name
+        (string_of_sh_type   sh.sh_type     )
+        (string_of_bitstring sh.sh_flags    )
+        (string_of_int32_x   sh.sh_addr     )
+        (string_of_int32_x   sh.sh_offset   )
+        (string_of_int32_x   sh.sh_size     )
+        (string_of_int32_x   sh.sh_link     )
+        (string_of_int32_x   sh.sh_info     )
         (string_of_int32_x   sh.sh_addralign)
-        (string_of_int32_x   sh.sh_entsize)
+        (string_of_int32_x   sh.sh_entsize  )
 
   end
 
