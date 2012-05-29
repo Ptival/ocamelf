@@ -7,10 +7,10 @@ Strong requirements
 -------------------
 
 * OCaml >= 3.12
-http://caml.inria.fr/
+> http://caml.inria.fr/
 
 * bistring >= 2.0.3
-http://code.google.com/p/bitstring/
+> http://code.google.com/p/bitstring/
 
 Possibly optional requirements
 ------------------------------
