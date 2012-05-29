@@ -370,13 +370,13 @@ struct
 
     let (read_p_type, write_p_type) =
       let (read_p_type, write_p_type) = mk_rw
-        [ ( 0l, PT_NULL)
-        ; ( 1l, PT_LOAD)
-        ; ( 2l, PT_DYNAMIC)
-        ; ( 3l, PT_INTERP)
-        ; ( 4l, PT_NOTE)
-        ; ( 5l, PT_SHLIB)
-        ; ( 6l, PT_PHDR)
+        [ (0l, PT_NULL)
+        ; (1l, PT_LOAD)
+        ; (2l, PT_DYNAMIC)
+        ; (3l, PT_INTERP)
+        ; (4l, PT_NOTE)
+        ; (5l, PT_SHLIB)
+        ; (6l, PT_PHDR)
         ]
       in
       (
