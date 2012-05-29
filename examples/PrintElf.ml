@@ -14,5 +14,7 @@ let _ =
   let ei = ELF.Identification.read bs in
   let eh = ELF.Ehdr.read ei bs in
   let shdr_array = ELF.Shdr.read eh bs in
+  let phdr_array = ELF.Phdr.read eh bs in
   print_endline (ELF.Ehdr.to_string eh);
-  Array.iter (fun shdr -> print_endline (ELF.Shdr.to_string shdr)) shdr_array
+  Array.iter (fun shdr -> print_endline (ELF.Shdr.to_string shdr)) shdr_array;
+  Array.iter (fun phdr -> print_endline (ELF.Phdr.to_string phdr)) phdr_array

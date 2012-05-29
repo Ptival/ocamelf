@@ -353,4 +353,120 @@ struct
         (string_of_int32_x   sh.sh_entsize)
 
   end
+
+  module Phdr =
+  struct
+
+    type p_type =
+      | PT_NULL
+      | PT_LOAD
+      | PT_DYNAMIC
+      | PT_INTERP
+      | PT_NOTE
+      | PT_SHLIB
+      | PT_PHDR
+      | PT_PROC  of int32
+      | PT_OTHER of int32
+
+    let (read_p_type, write_p_type) =
+      let (read_p_type, write_p_type) = mk_rw
+        [ ( 0l, PT_NULL)
+        ; ( 1l, PT_LOAD)
+        ; ( 2l, PT_DYNAMIC)
+        ; ( 3l, PT_INTERP)
+        ; ( 4l, PT_NOTE)
+        ; ( 5l, PT_SHLIB)
+        ; ( 6l, PT_PHDR)
+        ]
+      in
+      (
+        (fun x ->
+          if 0x7000_0000l <= x && x <= 0x7FFF_FFFFl
+          then PT_PROC(x)
+          else
+            try read_p_type x
+            with Not_found -> PT_OTHER(x)
+        ),
+        (function
+        | PT_PROC(x)  -> x
+        | PT_OTHER(x) -> x
+        | x           -> write_p_type x
+        )
+      )
+
+    let string_of_p_type = function
+    | PT_NULL     -> "PT_NULL"
+    | PT_LOAD     -> "PT_LOAD"
+    | PT_DYNAMIC  -> "PT_DYNAMIC"
+    | PT_INTERP   -> "PT_INTERP"
+    | PT_NOTE     -> "PT_NOTE"
+    | PT_SHLIB    -> "PT_SHLIB"
+    | PT_PHDR     -> "PT_PHDR"
+    | PT_PROC(x)  -> "PT_PROC("  ^ string_of_int32_x x ^ ")"
+    | PT_OTHER(x) -> "PT_OTHER(" ^ string_of_int32_x x ^ ")"
+
+    type elf_phdr =
+        { p_type   : p_type
+        ; p_offset : int32
+        ; p_vaddr  : int32
+        ; p_paddr  : int32
+        ; p_filesz : int32
+        ; p_memsz  : int32
+        ; p_flags  : bitstring
+        ; p_align  : int32
+        }
+
+    open Ehdr
+
+    let read (e_hdr: elf_ehdr) (bs: bitstring) =
+      let endian = e_hdr.endian in
+      let read_nth (n: int) =
+        let phdr_bit_ofs = Safe.(
+          8 * (of_int32 e_hdr.e_phoff + (n * e_hdr.e_phentsize))
+        ) in
+        bitmatch Bitstring.dropbits phdr_bit_ofs bs with
+          { p_type   : 32 : endian(endian), bind(read_p_type p_type)
+          ; p_offset : 32 : endian(endian)
+          ; p_vaddr  : 32 : endian(endian)
+          ; p_paddr  : 32 : endian(endian)
+          ; p_filesz : 32 : endian(endian)
+          ; p_memsz  : 32 : endian(endian)
+          ; p_flags  : 32 : bitstring
+          ; p_align  : 32 : endian(endian)
+          } ->
+            { p_type
+            ; p_offset
+            ; p_vaddr
+            ; p_paddr
+            ; p_filesz
+            ; p_memsz
+            ; p_flags
+            ; p_align
+            }
+      in
+      Array.init e_hdr.e_phnum read_nth
+
+    let to_string ph =
+      Printf.sprintf
+        "
+{ p_type   = %s
+; p_offset = %s
+; p_vaddr  = %s
+; p_paddr  = %s
+; p_filesz = %s
+; p_memsz  = %s
+; p_flags  = %s
+; p_align  = %s
+}"
+        (string_of_p_type    ph.p_type  )
+        (string_of_int32_x   ph.p_offset)
+        (string_of_int32_x   ph.p_vaddr )
+        (string_of_int32_x   ph.p_paddr )
+        (string_of_int32_x   ph.p_filesz)
+        (string_of_int32_x   ph.p_memsz )
+        (string_of_bitstring ph.p_flags )
+        (string_of_int32_x   ph.p_align )
+
+  end
+
 end

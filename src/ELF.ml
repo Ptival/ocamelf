@@ -27,4 +27,10 @@ sig
     val read: Ehdr.elf_ehdr -> bitstring -> elf_shdr array
     val to_string: elf_shdr -> string
   end
+  module Phdr:
+  sig
+    type elf_phdr
+    val read: Ehdr.elf_ehdr -> bitstring -> elf_phdr array
+    val to_string: elf_phdr -> string
+  end
 end
