@@ -6,16 +6,16 @@ type ei_osabi =
   | ELFOSABI_HPUX
   | ELFOSABI_STANDALONE
 
+let string_of_ei_osabi = function
+| ELFOSABI_SYSV       -> "ELFOSABI_SYSV"
+| ELFOSABI_HPUX       -> "ELFOSABI_HPUX"
+| ELFOSABI_STANDALONE -> "ELFOSABI_STANDALONE"
+
 let (read_ei_osabi, write_ei_osabi) = mk_rw
   [ (  0, ELFOSABI_SYSV)
   ; (  1, ELFOSABI_HPUX)
   ; (255, ELFOSABI_STANDALONE)
   ]
-
-let string_of_ei_osabi = function
-| ELFOSABI_SYSV       -> "ELFOSABI_SYSV"
-| ELFOSABI_HPUX       -> "ELFOSABI_HPUX"
-| ELFOSABI_STANDALONE -> "ELFOSABI_STANDALONE"
 
 type ei_abiversion = int
 
@@ -306,16 +306,28 @@ struct
         ; sh_addralign : int64
         ; sh_entsize   : int64
         (* extra: *)
-        ; name         : string
+        ; sh_name_str  : string
         }
 
     open Ehdr
 
-    let read (e_hdr: elf_ehdr) (bs: bitstring) =
-      let endian = e_hdr.endian in
+    let find_name_in_strtab strtab_section bs: int -> string =
+      let strtab_bit_start = Safe.(8 * of_int64 strtab_section.sh_offset) in
+      let strtab_bit_length = Safe.(8 * of_int64 strtab_section.sh_size) in
+      let strtab_bitstring =
+        Bitstring.subbitstring bs strtab_bit_start strtab_bit_length in
+        (* Hack: we exploit the representation of bitstrings, plus the
+           alignment constraints, to extract the names... *)
+      let (str, ofs, _) = strtab_bitstring in
+      fun n ->
+        let start = ofs / 8 + n in
+        String.sub str start (String.index_from str start '\000' - start)
+
+    let read (ehdr: elf_ehdr) (bs: bitstring) =
+      let endian = ehdr.endian in
       let read_nth (n: int) =
         let shdr_bit_ofs = Safe.(
-          8 * (of_int64 e_hdr.e_shoff + (n * e_hdr.e_shentsize))
+          8 * (of_int64 ehdr.e_shoff + (n * ehdr.e_shentsize))
         ) in
         bitmatch Bitstring.dropbits shdr_bit_ofs bs with
           { sh_name      : 32 : endian(endian)
@@ -339,28 +351,17 @@ struct
             ; sh_info
             ; sh_addralign
             ; sh_entsize
-            ; name = "" (* the name is found in a second pass *)
+            ; sh_name_str = "" (* the name is found in a second pass *)
             }
       in
-      let e_shdr_array = Array.init e_hdr.e_shnum read_nth in
+      let shdr_array = Array.init ehdr.e_shnum read_nth in
       (* Now we can fill the "name" field *)
-      let find_name n =
-        let strtab_section = e_shdr_array.(e_hdr.e_shstrndx) in
-        let strtab_bit_start = Safe.(8 * of_int64 strtab_section.sh_offset) in
-        let strtab_bit_length = Safe.(8 * of_int64 strtab_section.sh_size) in
-        let strtab_bitstring =
-          Bitstring.subbitstring bs strtab_bit_start strtab_bit_length in
-        (* Hack: we exploit the representation of bitstrings, plus the
-           alignment constraints, to extract the names... *)
-        let (str, ofs, _) = strtab_bitstring in
-        let start = ofs / 8 + n in
-        String.sub str start (String.index_from str start '\000' - start)
-      in
+      let find_name = find_name_in_strtab shdr_array.(ehdr.e_shstrndx) bs in
       Array.map
         (fun shdr ->
-          { shdr with name = find_name (Int32.to_int shdr.sh_name) }
+          { shdr with sh_name_str = find_name (Int32.to_int shdr.sh_name) }
         )
-        e_shdr_array
+        shdr_array
 
     let to_string sh =
       Printf.sprintf
@@ -376,7 +377,7 @@ struct
 ; sh_addralign = %s
 ; sh_entsize   = %s
 }"
-        (string_of_int32_d   sh.sh_name     ) (* -> *) sh.name
+        (string_of_int32_d   sh.sh_name     ) (* -> *) sh.sh_name_str
         (string_of_sh_type   sh.sh_type     )
         (string_of_bitstring sh.sh_flags    )
         (string_of_int64_x   sh.sh_addr     )
@@ -458,11 +459,11 @@ struct
 
     open Ehdr
 
-    let read (e_hdr: elf_ehdr) (bs: bitstring) =
-      let endian = e_hdr.endian in
+    let read (ehdr: elf_ehdr) (bs: bitstring) =
+      let endian = ehdr.endian in
       let read_nth (n: int) =
         let phdr_bit_ofs = Safe.(
-          8 * (of_int64 e_hdr.e_phoff + (n * e_hdr.e_phentsize))
+          8 * (of_int64 ehdr.e_phoff + (n * ehdr.e_phentsize))
         ) in
         bitmatch Bitstring.dropbits phdr_bit_ofs bs with
           { p_type   : 32 : endian(endian), bind(read_p_type p_type)
@@ -484,7 +485,7 @@ struct
             ; p_align
             }
       in
-      Array.init e_hdr.e_phnum read_nth
+      Array.init ehdr.e_phnum read_nth
 
     let to_string ph =
       Printf.sprintf
@@ -506,6 +507,171 @@ struct
         (string_of_int64_x   ph.p_filesz)
         (string_of_int64_x   ph.p_memsz )
         (string_of_int64_x   ph.p_align )
+
+  end
+
+  module Sym =
+  struct
+
+    type st_bind =
+      | STB_LOCAL
+      | STB_GLOBAL
+      | STB_WEAK
+      | STB_OS     of int
+      | STB_PROC   of int
+      | STB_OTHER  of int
+
+    let string_of_st_bind = function
+    | STB_LOCAL    -> "STB_LOCAL"
+    | STB_GLOBAL   -> "STB_GLOBAL"
+    | STB_WEAK     -> "STB_WEAK"
+    | STB_OS(x)    -> "STB_OS("    ^ string_of_int x ^ ")"       
+    | STB_PROC(x)  -> "STB_PROC("  ^ string_of_int x ^ ")"
+    | STB_OTHER(x) -> "STB_OTHER(" ^ string_of_int x ^ ")"
+
+    let (read_st_bind, write_st_bind) =
+      let (read_st_bind, write_st_bind) = mk_rw
+        [ (0, STB_LOCAL )
+        ; (1, STB_GLOBAL)
+        ; (2, STB_WEAK  )
+        ]
+      in
+      (
+        (fun x ->
+          if 10 <= x && x <= 12
+          then STB_OS(x)
+          else if 13 <= x && x <= 15
+          then STB_PROC(x)
+          else
+            try read_st_bind x
+            with Not_found -> STB_OTHER(x)
+        ),
+        (function
+        | STB_OS(x)    -> x
+        | STB_PROC(x)  -> x
+        | STB_OTHER(x) -> x
+        | x           -> write_st_bind x
+        )
+      )
+
+    type st_type =
+      | STT_NOTYPE
+      | STT_OBJECT
+      | STT_FUNC
+      | STT_SECTION
+      | STT_FILE
+      | STT_OS      of int
+      | STT_PROC    of int
+      | STT_OTHER   of int
+
+    let string_of_st_type = function
+      | STT_NOTYPE   -> "STT_NOTYPE"
+      | STT_OBJECT   -> "STT_OBJECT"
+      | STT_FUNC     -> "STT_FUNC"
+      | STT_SECTION  -> "STT_SECTION"
+      | STT_FILE     -> "STT_FILE"
+      | STT_OS(x)    -> "STT_OS("    ^ string_of_int x ^ ")"
+      | STT_PROC(x)  -> "STT_PROC("  ^ string_of_int x ^ ")"
+      | STT_OTHER(x) -> "STT_OTHER(" ^ string_of_int x ^ ")"
+
+    let (read_st_type, write_st_type) =
+      let (read_st_type, write_st_type) = mk_rw
+        [ (0, STT_NOTYPE )
+        ; (1, STT_OBJECT )
+        ; (2, STT_FUNC   )
+        ; (3, STT_SECTION)
+        ; (4, STT_FILE   )
+        ]
+      in
+      (
+        (fun x ->
+          if 10 <= x && x <= 12
+          then STT_OS(x)
+          else if 13 <= x && x <= 15
+          then STT_PROC(x)
+          else
+            try read_st_type x
+            with Not_found -> STT_OTHER(x)
+        ),
+        (function
+        | STT_OS(x)    -> x
+        | STT_PROC(x)  -> x
+        | STT_OTHER(x) -> x
+        | x           -> write_st_type x
+        )
+      )
+
+    type elf_sym =
+        { st_name     : int32
+        ; st_bind     : st_bind
+        ; st_type     : st_type
+        ; st_other    : int
+        ; st_shndx    : int
+        ; st_value    : int64
+        ; st_size     : int64
+        (* extra: *)
+        ; st_name_str : string
+        }
+
+    open Ehdr
+    open Shdr
+
+    let read (ehdr: elf_ehdr) (shdr_array: elf_shdr array) (bs: bitstring)
+        : elf_sym array =
+      let endian = ehdr.endian in
+      let symtab_shdr =
+        List.find
+          (fun shdr -> shdr.sh_name_str = ".symtab")
+          (Array.to_list shdr_array)
+      in
+      let sym_byte_size = 24 in
+      let nb_syms = Safe64.to_int symtab_shdr.sh_size / sym_byte_size in
+      let find_name =
+        find_name_in_strtab shdr_array.(Safe32.to_int symtab_shdr.sh_link) bs
+      in
+      let read_nth n =
+        let sym_bit_ofs = Safe.(
+          8 * (of_int64 symtab_shdr.sh_offset + n * sym_byte_size)
+        ) in
+        bitmatch Bitstring.dropbits sym_bit_ofs bs with
+          { st_name  : 32 : endian(endian)
+          ; st_bind  :  4 : endian(endian), bind(read_st_bind st_bind)
+          ; st_type  :  4 : endian(endian), bind(read_st_type st_type)
+          ; st_other :  8 : endian(endian)
+          ; st_shndx : 16 : endian(endian)
+          ; st_value : 64 : endian(endian)
+          ; st_size  : 64 : endian(endian)
+          } ->
+            { st_name     = st_name
+            ; st_bind     = st_bind
+            ; st_type     = st_type
+            ; st_other    = st_other
+            ; st_shndx    = st_shndx
+            ; st_value    = st_value
+            ; st_size     = st_size
+            ; st_name_str = find_name (Int32.to_int st_name)
+            }
+      in
+      Array.init nb_syms read_nth
+
+    let to_string sym =
+      Printf.sprintf
+        "
+{ st_name  = %s -> %s
+; st_bind  = %s
+; st_type  = %s
+; st_other = %s
+; st_shndx = %s
+; st_value = %s
+; st_size  = %s
+}"
+        (string_of_int32_d sym.st_name ) (* -> *) sym.st_name_str
+        (string_of_st_bind sym.st_bind )
+        (string_of_st_type sym.st_type )
+        (string_of_int     sym.st_other)
+        (string_of_int     sym.st_shndx)
+        (string_of_int64_x sym.st_value)
+        (string_of_int64_x sym.st_size )
 
   end
 
